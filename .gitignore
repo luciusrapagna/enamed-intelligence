@@ -1,0 +1,18 @@
+venv/
+__pycache__/
+*.pyc
+.env
+
+.ipynb_checkpoints/
+
+outputs/
+
+# PDFs e documentos
+*.pdf
+*.docx
+*.xlsx
+*.xls
+
+# Sistema
+.DS_Store
+Thumbs.db
