@@ -6,3 +6,5 @@ PyMuPDF
 scikit-learn
 tqdm
 matplotlib
+openai
+python-dotenv
