@@ -1,8 +1,9 @@
 import os
-import re
+import tempfile
+import streamlit as st
 
-from leitor_provas import escolher_prova, extrair_texto_pdf
 from extrator_questoes import extrair_questoes
+from leitor_provas import extrair_texto_pdf
 from leitor_planos import carregar_todos_planos
 from ia_selecao_questoes import selecionar_melhor_plano
 from ia_avancada import analisar_questao_com_ia
@@ -10,203 +11,184 @@ from ia_curricular import criar_perfis_curriculares, sugerir_uso_pedagogico
 from gerador_relatorio import gerar_relatorio
 
 
-PASTA_PROVAS = "data/provas"
 PASTA_PLANOS = "data/planos_aula"
-SAIDA_RELATORIO = "outputs/relatorios/relatorio_enamed_intelligence.docx"
+PASTA_OUTPUTS = "outputs/relatorios"
+SAIDA_RELATORIO = os.path.join(PASTA_OUTPUTS, "relatorio_enamed_intelligence.docx")
 
 
 def identificar_fonte(nome_arquivo):
     nome = nome_arquivo.upper()
-
     if "ENAMED" in nome:
         return "ENAMED"
-    elif "ENADE" in nome:
+    if "ENADE" in nome:
         return "ENADE"
-    elif "ENARE" in nome:
+    if "ENARE" in nome:
         return "ENARE"
-
     return "Fonte não identificada"
 
 
 def identificar_ano(nome_arquivo):
+    import re
     ano = re.search(r"(20\d{2})", nome_arquivo)
-
-    if ano:
-        return ano.group(1)
-
-    return "Ano não identificado"
+    return ano.group(1) if ano else "Ano não identificado"
 
 
 def identificar_conteudo(questao):
     texto = questao.lower()
-
     palavras_chave = [
-        "atenção primária",
-        "sus",
-        "hipertensão",
-        "diabetes",
-        "gestante",
-        "pré-natal",
-        "criança",
-        "idoso",
-        "urgência",
-        "emergência",
-        "vacinação",
-        "saúde mental",
-        "depressão",
-        "ansiedade",
-        "infarto",
-        "pneumonia",
-        "sepse",
-        "trauma",
-        "ética",
-        "bioética",
-        "semiologia",
-        "diagnóstico",
-        "tratamento",
-        "prevenção",
-        "promoção da saúde",
+        "atenção primária", "sus", "hipertensão", "diabetes", "gestante",
+        "pré-natal", "criança", "idoso", "urgência", "emergência",
+        "vacinação", "saúde mental", "depressão", "ansiedade", "infarto",
+        "pneumonia", "sepse", "trauma", "ética", "bioética", "semiologia",
+        "diagnóstico", "tratamento", "prevenção", "promoção da saúde",
     ]
-
-    encontrados = []
-
-    for palavra in palavras_chave:
-        if palavra in texto:
-            encontrados.append(palavra)
-
-    if encontrados:
-        return ", ".join(encontrados)
-
-    return "Conteúdo não identificado automaticamente"
+    encontrados = [p for p in palavras_chave if p in texto]
+    return ", ".join(encontrados) if encontrados else "Conteúdo não identificado automaticamente"
 
 
-print("=" * 60)
-print("ENAMED INTELLIGENCE")
-print("=" * 60)
-
-
-print("\nCarregando planos de aula...\n")
-
-planos = carregar_todos_planos(PASTA_PLANOS)
-
-print(f"Planos encontrados: {len(planos)}")
-
-
-print("\nCriando perfis curriculares...\n")
-
-perfis_curriculares = criar_perfis_curriculares(planos)
-
-print(f"Perfis curriculares criados: {len(perfis_curriculares)}")
-
-
-prova_escolhida = escolher_prova(PASTA_PROVAS)
-
-if prova_escolhida is None:
-    print("\nNenhuma prova foi encontrada.")
-    print("Adicione PDFs em data/provas.")
-    exit()
-
-
-nome_arquivo = os.path.basename(prova_escolhida)
-fonte = identificar_fonte(nome_arquivo)
-ano = identificar_ano(nome_arquivo)
-
-
-print("\n" + "=" * 60)
-print(f"PROVA SELECIONADA: {nome_arquivo}")
-print(f"Fonte: {fonte}")
-print(f"Ano: {ano}")
-print("=" * 60)
-
-
-print("\nExtraindo texto da prova...\n")
-
-texto = extrair_texto_pdf(prova_escolhida)
-
-
-questoes = extrair_questoes(texto)
-
-print(f"Questões identificadas: {len(questoes)}")
-
-
-resultados = []
-
-
-for i, questao in enumerate(questoes, start=1):
-
-    print("\n" + "-" * 60)
-    print(f"ANALISANDO QUESTÃO {i}")
-
-    melhor_plano, score = selecionar_melhor_plano(
-        questao,
-        planos
-    )
-
-    conteudo = identificar_conteudo(questao)
-
-    perfil_disciplina = perfis_curriculares.get(
-        melhor_plano,
-        {
-            "disciplina": melhor_plano,
-            "conteudos": [],
-            "competencias": [],
-            "habilidades": [],
-            "lacunas": ["Perfil curricular não encontrado."]
-        }
-    )
-
-    sugestao_pedagogica = sugerir_uso_pedagogico(
-        questao,
-        score,
-        conteudo,
-        perfil_disciplina
-    )
-
-    print("Executando IA avançada...\n")
-
-    analise_ia = analisar_questao_com_ia(
-        questao,
-        melhor_plano,
-        score,
-        conteudo
-    )
-
-    competencias = sugestao_pedagogica.get("competencias", [])
-    habilidades = sugestao_pedagogica.get("habilidades", [])
-    lacunas = sugestao_pedagogica.get("lacunas", [])
-
-    print(f"Disciplina recomendada: {melhor_plano}")
-    print(f"Compatibilidade: {score}%")
-    print(f"Conteúdo provável: {conteudo}")
-    print(f"Competências: {', '.join(competencias) if competencias else 'Não identificadas'}")
-    print(f"Habilidades: {', '.join(habilidades) if habilidades else 'Não identificadas'}")
-    print(f"Lacunas: {', '.join(lacunas) if lacunas else 'Sem lacunas evidentes'}")
-
-    resultados.append({
-        "numero": i,
-        "fonte": fonte,
-        "ano": ano,
-        "arquivo": nome_arquivo,
-        "disciplina": melhor_plano,
-        "score": score,
-        "conteudo": conteudo,
-        "questao": questao,
-        "analise_ia": analise_ia,
-        "competencias": competencias,
-        "habilidades": habilidades,
-        "lacunas": lacunas,
-        "sugestao_pedagogica": sugestao_pedagogica,
-    })
-
-
-print("\nGerando relatório Word...\n")
-
-gerar_relatorio(
-    resultados,
-    SAIDA_RELATORIO
+st.set_page_config(
+    page_title="ENAMED Intelligence | Athena Sciences",
+    page_icon="🧠",
+    layout="wide",
 )
 
-print("=" * 60)
-print("RELATÓRIO GERADO COM SUCESSO!")
-print(f"Arquivo salvo em:\n{SAIDA_RELATORIO}")
-print("=" * 60)
+st.title("🧠 ENAMED Intelligence")
+st.caption("Módulo Athena Sciences para análise inteligente de provas médicas, questões, planos de aula e compatibilidade curricular.")
+
+with st.sidebar:
+    st.header("Configurações")
+    limite_questoes = st.number_input(
+        "Número máximo de questões para analisar",
+        min_value=1,
+        max_value=200,
+        value=20,
+        step=1,
+    )
+    usar_ia = st.toggle("Executar IA avançada", value=True)
+    st.info("Para análises longas, reduza o número de questões no primeiro teste.")
+
+arquivo_pdf = st.file_uploader(
+    "Envie uma prova em PDF",
+    type=["pdf"],
+)
+
+if arquivo_pdf is not None:
+    os.makedirs(PASTA_OUTPUTS, exist_ok=True)
+
+    nome_arquivo = arquivo_pdf.name
+    fonte = identificar_fonte(nome_arquivo)
+    ano = identificar_ano(nome_arquivo)
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Arquivo", nome_arquivo)
+    col2.metric("Fonte", fonte)
+    col3.metric("Ano", ano)
+
+    if st.button("Analisar prova", type="primary"):
+        with st.spinner("Carregando planos de aula..."):
+            planos = carregar_todos_planos(PASTA_PLANOS)
+            perfis_curriculares = criar_perfis_curriculares(planos)
+
+        st.success(f"Planos encontrados: {len(planos)}")
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(arquivo_pdf.read())
+            caminho_pdf = tmp.name
+
+        with st.spinner("Extraindo texto do PDF..."):
+            texto = extrair_texto_pdf(caminho_pdf)
+
+        with st.spinner("Extraindo questões..."):
+            questoes = extrair_questoes(texto)
+
+        questoes = questoes[:limite_questoes]
+
+        st.success(f"Questões identificadas para análise: {len(questoes)}")
+
+        resultados = []
+        barra = st.progress(0)
+
+        for i, questao in enumerate(questoes, start=1):
+            with st.expander(f"Questão {i}", expanded=False):
+                st.write(questao[:2000])
+
+            melhor_plano, score = selecionar_melhor_plano(questao, planos)
+            conteudo = identificar_conteudo(questao)
+
+            perfil_disciplina = perfis_curriculares.get(
+                melhor_plano,
+                {
+                    "disciplina": melhor_plano,
+                    "conteudos": [],
+                    "competencias": [],
+                    "habilidades": [],
+                    "lacunas": ["Perfil curricular não encontrado."],
+                },
+            )
+
+            sugestao_pedagogica = sugerir_uso_pedagogico(
+                questao,
+                score,
+                conteudo,
+                perfil_disciplina,
+            )
+
+            if usar_ia:
+                analise_ia = analisar_questao_com_ia(
+                    questao,
+                    melhor_plano,
+                    score,
+                    conteudo,
+                )
+            else:
+                analise_ia = "IA avançada desativada nesta execução."
+
+            competencias = sugestao_pedagogica.get("competencias", [])
+            habilidades = sugestao_pedagogica.get("habilidades", [])
+            lacunas = sugestao_pedagogica.get("lacunas", [])
+
+            resultados.append({
+                "numero": i,
+                "fonte": fonte,
+                "ano": ano,
+                "arquivo": nome_arquivo,
+                "disciplina": melhor_plano,
+                "score": score,
+                "conteudo": conteudo,
+                "questao": questao,
+                "analise_ia": analise_ia,
+                "competencias": competencias,
+                "habilidades": habilidades,
+                "lacunas": lacunas,
+                "sugestao_pedagogica": sugestao_pedagogica,
+            })
+
+            barra.progress(i / len(questoes))
+
+        st.subheader("Resultados resumidos")
+
+        for r in resultados:
+            st.markdown(f"### Questão {r['numero']}")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Disciplina recomendada", r["disciplina"])
+            c2.metric("Compatibilidade", f"{r['score']}%")
+            c3.metric("Conteúdo provável", r["conteudo"])
+            st.write("**Competências:**", ", ".join(r["competencias"]) if r["competencias"] else "Não identificadas")
+            st.write("**Habilidades:**", ", ".join(r["habilidades"]) if r["habilidades"] else "Não identificadas")
+            st.write("**Lacunas:**", ", ".join(r["lacunas"]) if r["lacunas"] else "Sem lacunas evidentes")
+            st.divider()
+
+        with st.spinner("Gerando relatório Word..."):
+            gerar_relatorio(resultados, SAIDA_RELATORIO)
+
+        st.success("Relatório gerado com sucesso.")
+
+        with open(SAIDA_RELATORIO, "rb") as f:
+            st.download_button(
+                label="Baixar relatório Word",
+                data=f,
+                file_name="relatorio_enamed_intelligence.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+else:
+    st.info("Envie uma prova em PDF para iniciar a análise.")
