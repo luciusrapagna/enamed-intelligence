@@ -15,4 +15,4 @@ outputs/
 
 # Sistema
 .DS_Store
-Thumbs.db
+Thumbs.db*.bkp*
