@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import streamlit as st
+import pandas as pd
 
 # =====================================================
 # PYTHONPATH
@@ -23,6 +24,7 @@ from ia_curricular import (
     sugerir_uso_pedagogico
 )
 from gerador_relatorio import gerar_relatorio
+from blueprint_engine import gerar_blueprint
 
 # =====================================================
 # CONFIG
@@ -306,6 +308,44 @@ if st.button("PROCESSAR ANÁLISE"):
         st.success(
             f"{len(questoes)} questões identificadas."
         )
+
+        tipo_blueprint, df_questoes_blueprint, df_resumo_blueprint = gerar_blueprint(
+            questoes,
+            nome_arquivo,
+            texto
+        )
+
+        st.subheader("Blueprint da prova")
+        st.info(f"Tipo de prova reconhecido: {tipo_blueprint}")
+
+        col_bp1, col_bp2 = st.columns(2)
+        col_bp1.metric("Total de questões", len(questoes))
+        col_bp2.metric("Fonte reconhecida", tipo_blueprint)
+
+        st.markdown("### Percentual por grande área")
+        st.dataframe(df_resumo_blueprint, use_container_width=True)
+
+        st.markdown("### Questões classificadas por grande área")
+        st.dataframe(df_questoes_blueprint, use_container_width=True)
+
+        os.makedirs("outputs/planilhas", exist_ok=True)
+
+        caminho_excel_blueprint = os.path.join(
+            "outputs/planilhas",
+            "blueprint_enamed_intelligence.xlsx"
+        )
+
+        with pd.ExcelWriter(caminho_excel_blueprint, engine="openpyxl") as writer:
+            df_resumo_blueprint.to_excel(writer, sheet_name="Resumo por área", index=False)
+            df_questoes_blueprint.to_excel(writer, sheet_name="Questões classificadas", index=False)
+
+        with open(caminho_excel_blueprint, "rb") as f:
+            st.download_button(
+                "BAIXAR BLUEPRINT EXCEL",
+                f,
+                file_name="blueprint_enamed_intelligence.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
         resultados = []
 

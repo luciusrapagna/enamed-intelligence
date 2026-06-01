@@ -1,6 +1,7 @@
 import os
 import tempfile
 import streamlit as st
+import pandas as pd
 
 from extrator_questoes import extrair_questoes
 from leitor_provas import extrair_texto_pdf
@@ -9,6 +10,7 @@ from ia_selecao_questoes import selecionar_melhor_plano
 from ia_avancada import analisar_questao_com_ia
 from ia_curricular import criar_perfis_curriculares, sugerir_uso_pedagogico
 from gerador_relatorio import gerar_relatorio
+from blueprint_engine import gerar_blueprint
 
 
 PASTA_PLANOS = "data/planos_aula"
@@ -79,10 +81,7 @@ if arquivo_pdf is not None:
     fonte = identificar_fonte(nome_arquivo)
     ano = identificar_ano(nome_arquivo)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Arquivo", nome_arquivo)
-    col2.metric("Fonte", fonte)
-    col3.metric("Ano", ano)
+    # Métricas iniciais removidas: o Blueprint será o painel principal unificado.
 
     if st.button("Analisar prova", type="primary"):
         with st.spinner("Carregando planos de aula..."):
@@ -103,7 +102,42 @@ if arquivo_pdf is not None:
 
         questoes = questoes[:limite_questoes]
 
-        st.success(f"Questões identificadas para análise: {len(questoes)}")
+        tipo_blueprint, df_questoes_blueprint, df_resumo_blueprint = gerar_blueprint(
+            questoes,
+            nome_arquivo,
+            texto
+        )
+
+        st.subheader("ATHENA Blueprint | ENAMED Intelligence")
+        st.info(f"Tipo de prova reconhecido: {tipo_blueprint}")
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Arquivo", nome_arquivo)
+        c2.metric("Total de questões", len(questoes))
+        c3.metric("Ano", ano)
+
+        st.markdown("### Percentual por grande área")
+        st.dataframe(df_resumo_blueprint, use_container_width=True)
+
+        st.markdown("### Questões classificadas")
+        st.dataframe(df_questoes_blueprint, use_container_width=True)
+
+        os.makedirs("outputs/planilhas", exist_ok=True)
+        caminho_excel_blueprint = "outputs/planilhas/blueprint_enamed_intelligence.xlsx"
+
+        with pd.ExcelWriter(caminho_excel_blueprint, engine="openpyxl") as writer:
+            df_resumo_blueprint.to_excel(writer, sheet_name="Resumo por área", index=False)
+            df_questoes_blueprint.to_excel(writer, sheet_name="Questões classificadas", index=False)
+
+        with open(caminho_excel_blueprint, "rb") as f:
+            st.download_button(
+                "Baixar Blueprint Excel",
+                f,
+                file_name="blueprint_enamed_intelligence.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        st.success(f"Questões identificadas para análise curricular: {len(questoes)}")
 
         resultados = []
         barra = st.progress(0)
